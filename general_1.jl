@@ -61,6 +61,14 @@ for point_1 in base_point_list
   end
 end
 
+function f_1()
+
+end
+
+function f_2()
+
+end
+
 # for i in 1:1000
 #     point_1_1 = normalize(rand(1, 4))
 #     point_1_2 = normalize(rand(1, 4))
