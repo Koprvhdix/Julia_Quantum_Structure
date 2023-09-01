@@ -27,6 +27,8 @@ function f_1(X_list)
   rho_2 = Semidefinite(2)
   rho_3 = Semidefinite(2)
 
+  constraints = [rho_1 in :SDP, rho_2 in :SDP, rho_3 in :SDP, rho_1[1, 1] > 0, rho_1[2, 2] > 0, rho_2[1, 1] > 0, rho_2[2, 2] > 0,  rho_3[1, 1] > 0, rho_3[2, 2] > 0 ]
+
   rho_next = kron(rho_1, X_list[1][1])
   rho_next += (exchange * kron(X_list[1][2], rho_2) * exchange)
   rho_next += kron(X_list[1][3], rho_3)
@@ -42,17 +44,18 @@ function f_1(X_list)
     rho_next +=(exchange * kron(X_list[index][2], rho_2) * exchange)
     rho_next += kron(X_list[index][3], rho_3)
 
+    push!(constraints, rho_1 in :SDP)
+    push!(constraints, rho_1[1, 1] > 0, rho_1[2, 2] > 0)
+    push!(constraints, rho_2 in :SDP)
+    push!(constraints, rho_2[1, 1] > 0, rho_2[2, 2] > 0)
+    push!(constraints, rho_3 in :SDP)
+    push!(constraints, rho_3[1, 1] > 0, rho_3[2, 2] > 0)
+
     push!(rho_list, [rho_1, rho_2, rho_3 ] )
   end
 
   objective = -tr(rho_next)
-  constraints = [isposdef(rho - rho_next)]
-
-  for item in rho_list
-    push!(constraints, isposdef(item[1]))
-    push!(constraints, isposdef(item[2]))
-    push!(constraints, isposdef(item[3]))
-  end
+  push!(constraints, (rho - rho_next) in :SDP)
 
   problem = minimize(objective, constraints)
   solve!(problem, SCS.Optimizer)
@@ -66,6 +69,8 @@ function f_2(X_list)
   rho_1 = Semidefinite(4)
   rho_2 = Semidefinite(4)
   rho_3 = Semidefinite(4)
+
+  constraints = [rho_1 in :SDP, rho_2 in :SDP, rho_3 in :SDP, rho_1[1, 1] > 0, rho_1[2, 2] > 0, rho_2[1, 1] > 0, rho_2[2, 2] > 0,  rho_3[1, 1] > 0, rho_3[2, 2] > 0 ]
 
   rho_next = kron(X_list[1][1], rho_1)
   rho_next += (exchange * kron(rho_2, X_list[1][2]) * exchange)
@@ -82,17 +87,18 @@ function f_2(X_list)
     rho_next += (exchange * kron(rho_2, X_list[index][2]) * exchange)
     rho_next += kron(rho_3, X_list[index][3])
 
+    push!(constraints, rho_1 in :SDP)
+    push!(constraints, rho_1[1, 1] > 0, rho_1[2, 2] > 0)
+    push!(constraints, rho_2 in :SDP)
+    push!(constraints, rho_2[1, 1] > 0, rho_2[2, 2] > 0)
+    push!(constraints, rho_3 in :SDP)
+    push!(constraints, rho_3[1, 1] > 0, rho_3[2, 2] > 0)
+
     push!(rho_list, [rho_1, rho_2, rho_3 ] )
   end
 
   objective = -tr(rho_next)
-  constraints = [isposdef(rho - rho_next)]
-
-  for item in rho_list
-    push!(constraints, isposdef(item[1]))
-    push!(constraints, isposdef(item[2]))
-    push!(constraints, isposdef(item[3]))
-  end
+  push!(constraints, (rho - rho_next) in :SDP)
 
   problem = minimize(objective, constraints)
   solve!(problem, SCS.Optimizer)
@@ -117,13 +123,13 @@ end
 
 first_list_list = [first_list]
 second_list_list = []
-optival_list = []
+optival_list = [0.0]
 
 for i in 1:100
   second_list, optval = f_1(first_list_list[i])
   push!(second_list_list, second_list)
 
-  if optval < optival_list[end] * 0.95
+  if optval > optival_list[end] * 0.95
     println("Second List")
     println(optval, optival_list[end])
     println(second_list_list[end - 1])
@@ -135,7 +141,7 @@ for i in 1:100
   next_first_list, optval = f_2(second_list)
   push!(first_list_list, next_first_list)
 
-  if optval < optival_list[end] * 0.95
+  if optval > optival_list[end] * 0.95
     println("First List")
     println(optval, optival_list[end])
     println(first_list_list[end - 1])
