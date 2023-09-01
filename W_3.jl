@@ -56,11 +56,10 @@ function f_1(X_list)
 
   problem = minimize(objective, constraints)
   solve!(problem, SCS.Optimizer)
-  println(problem.optval)
+  # println(problem.optval)
 
   next_X = [ [item[1].value, item[2].value, item[3].value] for item in evaluate(rho_list) ]
-  # println(next_X)
-  return next_X
+  return next_X, problem.optval
 end
 
 function f_2(X_list)
@@ -97,11 +96,10 @@ function f_2(X_list)
 
   problem = minimize(objective, constraints)
   solve!(problem, SCS.Optimizer)
-  # println(evaluate(rho_list))
 
   next_X = [ [item[1].value, item[2].value, item[3].value] for item in evaluate(rho_list) ]
   # println(next_X)
-  return next_X
+  return next_X, problem.optval
 end
 
 X = rand(4, 4); A = X * X'; rho_a = A / tr(A)
@@ -118,9 +116,31 @@ for i in 1:299
 end
 
 first_list_list = [first_list]
+second_list_list = []
+optival_list = []
 
 for i in 1:100
-  second_list = f_1(first_list_list[i])
-  next_first_list = f_2(second_list)
+  second_list, optval = f_1(first_list_list[i])
+  push!(second_list_list, second_list)
+
+  if optval < optival_list[end] * 0.95
+    println("Second List")
+    println(optval, optival_list[end])
+    println(second_list_list[end - 1])
+    println(second_list_list[end])
+    break
+  end
+  push!(optival_list, optval)
+
+  next_first_list, optval = f_2(second_list)
   push!(first_list_list, next_first_list)
+
+  if optval < optival_list[end] * 0.95
+    println("First List")
+    println(optval, optival_list[end])
+    println(first_list_list[end - 1])
+    println(first_list_list[end])
+    break
+  end
+  push!(optival_list, optval)
 end
