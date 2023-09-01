@@ -108,26 +108,19 @@ X = rand(4, 4); A = X * X'; rho_a = A / tr(A)
 X = rand(4, 4); B = X * X'; rho_b = B / tr(B)
 X = rand(4, 4); C = X * X'; rho_c = C / tr(C)
 
-X_list = [ [rho_a, rho_b, rho_c] ]
+first_list = [ [rho_a, rho_b, rho_c] ]
 
 for i in 1:299
   X = rand(4, 4); A = X * X'; rho_a = A / tr(A)
   X = rand(4, 4); B = X * X'; rho_b = B / tr(B)
   X = rand(4, 4); C = X * X'; rho_c = C / tr(C)
-  push!(X_list, [rho_a, rho_b, rho_c])
+  push!(first_list, [rho_a, rho_b, rho_c])
 end
 
-# for i in 1:10
-#   next_X = f_1(X_list)
-#   X_list = f_2(next_X)
-# end
-next_X = f_1(X_list)
-X_2 = f_2(next_X)
-next_2 = f_1(X_2)
-X_3 = f_2(next_2)
-next_3 = f_1(X_3)
-X_4 = f_2(next_3)
-next_4 = f_1(X_4)
-X_5 = f_2(next_4)
-next_5 = f_1(X_5)
-X_6 = f_2(next_5)
+first_list_list = [first_list]
+
+for i in 1:100
+  second_list = f_1(first_list_list[i])
+  next_first_list = f_2(second_list)
+  push!(first_list_list, next_first_list)
+end
