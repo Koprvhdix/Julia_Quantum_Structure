@@ -57,7 +57,8 @@ function f_1(X_list)
   objective = -tr(rho_next)
   push!(constraints, (rho - rho_next) in :SDP)
 
-  problem = minimize(objective, constraints)
+  problem = minimize(objective, (rho - rho_next) in :SDP)
+  # problem = minimize(objective, constraints)
   solve!(problem, SCS.Optimizer)
   # println(problem.optval)
 
@@ -100,11 +101,24 @@ function f_2(X_list)
   objective = -tr(rho_next)
   push!(constraints, (rho - rho_next) in :SDP)
 
-  problem = minimize(objective, constraints)
+  problem = minimize(objective, (rho - rho_next) in :SDP)
+  # problem = minimize(objective, constraints)
   solve!(problem, SCS.Optimizer)
 
   next_X = [ [item[1].value, item[2].value, item[3].value] for item in evaluate(rho_list) ]
-  # println(next_X)
+
+  rho_result = kron(X_list[1][1], next_X[1][1])
+  rho_next += (exchange * kron(next_X[1][2], X_list[1][2]) * exchange)
+  rho_next += kron(next_X[1][3], X_list[1][3])
+  for index in 2:length(X_list)
+    rho_result += kron(X_list[index][1], next_X[index][1])
+    rho_result += (exchange * kron(next_X[index][2], X_list[index][2]) * exchange)
+    rho_result += kron(next_X[index][3], X_list[index][3])
+  end
+
+  println(rho_result)
+  println(eigvals(rho - rho_result))
+
   return next_X, problem.optval
 end
 
