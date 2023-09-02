@@ -1,8 +1,15 @@
 using Convex, SCS
-
 using LinearAlgebra
+using Random, RandomMatrices
 
-rho = [0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ;
+function randState(dim)
+  d = Haar(1)
+  ru = rand(d, dim)
+  re = rand(dim)
+  ru*Diagonal(re/sum(re))*ru'
+end
+
+orho = [0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ;
  0.0  0.25 0.25 0.   0.25 0.   0.   0.   0.25 0.   0.   0.   0.   0.   0.   0.  ;
  0.0  0.25 0.25 0.   0.25 0.   0.   0.   0.25 0.   0.   0.   0.   0.   0.   0.  ;
  0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ;
@@ -18,8 +25,6 @@ rho = [0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0. 
  0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ;
  0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ;
  0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ]
-
-rho = 0.3 * rho + (0.7 / 16) * I(16)
 
 exchange_1 = [1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 ;
  0.0 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 ;
@@ -55,105 +60,53 @@ exchange_2 = [1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 ;
  0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 ;
  0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 ]
 
-function f_1(X_list)
-  rho_1 = Semidefinite(4)
-  rho_2 = Semidefinite(4)
-  rho_3 = Semidefinite(4)
-
-  rho_next = kron(rho_1, X_list[1][1])
-  rho_next += (exchange_1 * kron(rho_2, X_list[1][2]) * exchange_1)
-  rho_next += (exchange_2 * kron(rho_3, X_list[1][3]) * exchange_2)
-
-  rho_list = [ [rho_1, rho_2, rho_3 ] ]
-
-  for index in 2:length(X_list)
-    rho_1 = Semidefinite(4)
-    rho_2 = Semidefinite(4)
-    rho_3 = Semidefinite(4)
-
-    rho_next += kron(rho_1, X_list[index][1])
-    rho_next += (exchange_1 * kron(rho_2, X_list[index][2]) * exchange_1)
-    rho_next += (exchange_2 * kron(rho_3, X_list[index][3]) * exchange_2)
-
-    push!(rho_list, [rho_1, rho_2, rho_3 ] )
-  end
-
-  objective = -tr(rho_next)
-  constraints = [isposdef(rho - rho_next)]
-
-  for item in rho_list
-    push!(constraints, isposdef(item[1]))
-    push!(constraints, isposdef(item[2]))
-    push!(constraints, isposdef(item[3]))
-  end
-
-  problem = minimize(objective, constraints)
-  solve!(problem, SCS.Optimizer)
+function f_1(X_list,nps)
+  p = Variable()
+  rhoAs = [Semidefinite(4) for i in 1:nps]
+  rhoBs = [Semidefinite(4) for i in 1:nps]
+  rhoCs = [Semidefinite(4) for i in 1:nps]
+  rho_next = sum(kron(X_list[1][i], rhoAs[i]) for i in 1:nps) + sum((exchange_1 * kron(X_list[2][i], rhoBs[i]) * exchange_1) for i in 1:nps) +  sum((exchange_2 * kron(X_list[3][i], rhoCs[i]) * exchange_2) for i in 1:nps)
+  objective = p
+  constraints = [p * orho + ((1-p) / 16) * I(16) == rho_next]
+  constraints += [tr(rho) <= 1 for rho in rhoAs]
+  constraints += [tr(rho) <= 1 for rho in rhoBs]
+  constraints += [tr(rho) <= 1 for rho in rhoCs]
+  problem = maximize(objective, constraints)
+  solve!(problem, SCS.Optimizer, silent_solver=true)
   println(problem.optval)
 
-  next_X = [ [item[1].value, item[2].value, item[3].value] for item in evaluate(rho_list) ]
-  # println(next_X)
-  return next_X
+  # println(evaluate(rho_next))
+  # p_value = evaluate(p)
+  # println(p_value * orho + ((1-p_value) / 16) * I(16))
+
+  [[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]], problem.optval
 end
 
-function f_2(X_list)
-  rho_1 = Semidefinite(4)
-  rho_2 = Semidefinite(4)
-  rho_3 = Semidefinite(4)
-
-  rho_next = kron(X_list[1][1], rho_1)
-  rho_next += (exchange_1 * kron(X_list[1][2], rho_2) * exchange_1)
-  rho_next += (exchange_2 * kron(X_list[1][3], rho_3) * exchange_2)
-
-  rho_list = [ [rho_1, rho_2, rho_3 ] ]
-
-  for index in 2:length(X_list)
-    rho_1 = Semidefinite(4)
-    rho_2 = Semidefinite(4)
-    rho_3 = Semidefinite(4)
-
-    rho_next += kron(X_list[index][1], rho_1)
-    rho_next += (exchange_1 * kron(X_list[index][2], rho_2) * exchange_1)
-    rho_next += (exchange_2 * kron(X_list[index][3], rho_3) * exchange_2)
-
-    push!(rho_list, [rho_1, rho_2, rho_3 ] )
-  end
-
-  objective = -tr(rho_next)
-  constraints = [isposdef(rho - rho_next)]
-
-  for item in rho_list
-    push!(constraints, isposdef(item[1]))
-    push!(constraints, isposdef(item[2]))
-    push!(constraints, isposdef(item[3]))
-  end
-
-  problem = minimize(objective, constraints)
-  solve!(problem, SCS.Optimizer)
+function f_2(X_list,nps)
+  p = Variable()
+  rhoAs = [Semidefinite(4) for i in 1:nps]
+  rhoBs = [Semidefinite(4) for i in 1:nps]
+  rhoCs = [Semidefinite(4) for i in 1:nps]
+  rho_next = sum(kron(rhoAs[i], X_list[1][i]) for i in 1:nps) + sum((exchange_1 * kron(rhoBs[i], X_list[2][i]) * exchange_1) for i in 1:nps) +  sum((exchange_2 * kron(rhoCs[i], X_list[3][i]) * exchange_2) for i in 1:nps)
+  objective = p
+  constraints = [p * orho + ((1-p) / 16) * I(16) == rho_next]
+  constraints += [tr(rho) <= 1 for rho in rhoAs]
+  constraints += [tr(rho) <= 1 for rho in rhoBs]
+  constraints += [tr(rho) <= 1 for rho in rhoCs]
+  problem = maximize(objective, constraints)
+  solve!(problem, SCS.Optimizer, silent_solver=true)
   println(problem.optval)
-
-  next_X = [ [item[1].value, item[2].value, item[3].value] for item in evaluate(rho_list) ]
-  # println(next_X)
-  return next_X
+  [[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]], problem.optval
 end
 
-X = rand(4, 4); A = X * X'; rho_a = A / tr(A)
-X = rand(4, 4); B = X * X'; rho_b = B / tr(B)
-X = rand(4, 4); C = X * X'; rho_c = C / tr(C)
+nps = 1000
 
-first_list = [ [rho_a, rho_b, rho_c] ]
-
-for i in 1:999
-  X = rand(4, 4); A = X * X'; rho_a = A / tr(A)
-  X = rand(4, 4); B = X * X'; rho_b = B / tr(B)
-  X = rand(4, 4); C = X * X'; rho_c = C / tr(C)
-  push!(first_list, [rho_a, rho_b, rho_c])
-end
-
-first_list_list = [first_list]
-
-for i in 1:100
-  second_list = f_1(first_list_list[i])
-  next_first_list = f_2(second_list)
-  push!(first_list_list, next_first_list)
+for j in 1:10
+    X_list = [[randState(4) for i in 1:nps] for j in 1:3]
+    length = 10
+    for i in 1:length
+        X_list, optval = f_1(X_list,nps)
+        X_list, optval = f_2(X_list,nps)
+    end
+    println("one round ", j)
 end
