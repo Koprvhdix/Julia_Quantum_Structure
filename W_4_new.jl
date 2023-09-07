@@ -63,59 +63,66 @@ exchange_2 = [ 1.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 ;
 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 ;
 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0]
 
+struct MultiState
+	mat::Matrix{Complex{Float64}}
+	dims::Array{Int,1}
+end;
+
+rho = MultiState(orho, [2, 2, 2, 2])
+
 function f_1(X_list,nps)
-  p = Variable()
-  rhoAs = [Semidefinite(4) for i in 1:nps]
-  rhoBs = [Semidefinite(4) for i in 1:nps]
-  rhoCs = [Semidefinite(4) for i in 1:nps]
+  t = Variable(1,Positive());
+  rhoAs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoBs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoCs = [HermitianSemidefinite(4) for i in 1:nps]
   rho_next = sum(kron(X_list[1][i], rhoAs[i]) for i in 1:nps) + sum((exchange_1 * kron(X_list[2][i], rhoBs[i]) * exchange_1) for i in 1:nps) +  sum((exchange_2 * kron(X_list[3][i], rhoCs[i]) * exchange_2) for i in 1:nps)
-  objective = p
-  constraints = [p * orho + ((1-p) / 16) * I(16) == rho_next]
-  constraints += [tr(rho) <= 1 for rho in rhoAs]
-  constraints += [tr(rho) <= 1 for rho in rhoBs]
-  constraints += [tr(rho) <= 1 for rho in rhoCs]
-  problem = maximize(objective, constraints)
+  
+  II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;
+  problem= maximize(t);
+  problem.constraints+= ((t*rho.mat+(1.0-t)/prod(rho.dims)*II) == rho_next);
   solve!(problem, Mosek.Optimizer, silent_solver=true)
   println(problem.optval)
-
-  # println(evaluate(rho_next))
-  # p_value = evaluate(p)
-  # println(p_value * orho + ((1-p_value) / 16) * I(16))
 
   [[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]], problem.optval
 end
 
 function f_2(X_list,nps)
-  p = Variable()
-  rhoAs = [Semidefinite(4) for i in 1:nps]
-  rhoBs = [Semidefinite(4) for i in 1:nps]
-  rhoCs = [Semidefinite(4) for i in 1:nps]
+  t = Variable(1,Positive());
+  rhoAs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoBs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoCs = [HermitianSemidefinite(4) for i in 1:nps]
   rho_next = sum(kron(rhoAs[i], X_list[1][i]) for i in 1:nps) + sum((exchange_1 * kron(rhoBs[i], X_list[2][i]) * exchange_1) for i in 1:nps) +  sum((exchange_2 * kron(rhoCs[i], X_list[3][i]) * exchange_2) for i in 1:nps)
-  objective = p
-  constraints = [p * orho + ((1-p) / 16) * I(16) == rho_next]
-  constraints += [tr(rho) <= 1 for rho in rhoAs]
-  constraints += [tr(rho) <= 1 for rho in rhoBs]
-  constraints += [tr(rho) <= 1 for rho in rhoCs]
-  problem = maximize(objective, constraints)
+  
+  II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;
+  problem= maximize(t);
+  problem.constraints+= ((t*rho.mat+(1.0-t)/prod(rho.dims)*II) == rho_next);
+
   solve!(problem, Mosek.Optimizer, silent_solver=true)
   println(problem.optval)
   [[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]], problem.optval
 end
 
-nps = 100
+nps = 300
+
+function nlize(rho)
+  evs = eigvals(rho)
+  revs = [real(it) for it in evs]
+  ievs = [imag(it) for it in evs]
+  dim = length(evs)
+  if ievs'*ievs/(revs'*revs)> 1e-3 || minimum(revs) < 0
+    randState(dim)
+  else rho/tr(rho)
+  end
+end
 
 for j in 1:20
     X_list = [[randState(4) for i in 1:nps] for j in 1:3]
-    length = 10
+    length = 30
     for i in 1:length
         X_list, optval = f_1(X_list,nps)
-        if optval > 0.15
-          length = 50
-        end
+        X_list = [[nlize(rho) for rho in rhos] for rhos in X_list]
         X_list, optval = f_2(X_list,nps)
-        if optval > 0.15
-          length = 50
-        end
+        X_list = [[nlize(rho) for rho in rhos] for rhos in X_list]
     end
     println("one round ", j)
 end
