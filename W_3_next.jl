@@ -157,7 +157,7 @@ end
 # X_list = randState(2)
 # println(X_list[1])
 
-nps = 100
+nps = 200
 # # X_list = [[randState(4) for i in 1:nps] for j in 1:3]
 # for j in 1:10
 #     X_list = randState(2)
@@ -168,14 +168,14 @@ nps = 100
 #     println("one round ", j)
 # end
 
-X_list = randState();
+X_list = randState(2, 200);
 # f_2(my_rho, X_list, nps)
 
 rho = MultiState(orho, [2, 2, 2]);
-p=Variable(1,Positive());
+t=Variable(1,Positive());
 rhoAs = [HermitianSemidefinite(4,4) for i in 1:nps]
-rhoBs = [HermitianSemidefinite(4,4) for i in 1:nps]
-rhoCs = [HermitianSemidefinite(4,4) for i in 1:nps]
+# rhoBs = [HermitianSemidefinite(4,4) for i in 1:nps]
+# rhoCs = [HermitianSemidefinite(4,4) for i in 1:nps]
 
 global C= zeros(Complex{Float64},8,8);
 for l in 1:8
@@ -184,13 +184,12 @@ for l in 1:8
   C[p,l]=1.0;
 end;
 
-rho_next = sum(kron(X_list[i], rhoAs[i]) for i in 1:nps) +  sum((C*kron(X_list[i], rhoAs[i])*C) for i in 1:nps) +  sum(kron(rhoCs[i], X_list[i]) for i in 1:nps)
+rho_next = sum(kron(X_list[i], rhoAs[i]) for i in 1:nps) +  sum((C*kron(X_list[i], rhoAs[i])*C) for i in 1:nps) +  sum(kron(rhoAs[i], X_list[i]) for i in 1:nps)
 
 # global rho_next=zeros(Complex{Float64},prod(rho.dims),prod(rho.dims));
 # for i in 1:nps
 #   global rho_next+= kron(X_list[i], rhoAs[i]);
 #   global rho_next+= kron(rhoCs[i], X_list[i]);
-  
 #   C= zeros(Complex{Float64},8,8);
 #   for l in 1:8
 #   kk= LocalIndex(l,[2,2,2]); tmp=kk[1]; kk[1]=kk[2]; kk[2]= tmp;
@@ -201,11 +200,32 @@ rho_next = sum(kron(X_list[i], rhoAs[i]) for i in 1:nps) +  sum((C*kron(X_list[i
 # end;
 
 II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;
-problem= maximize(p);
-problem.constraints+= ((p*rho.mat+(1.0-p)/prod(rho.dims)*II) == rho_next);
+problem= maximize(t);
+problem.constraints+= ((t*rho.mat+(1.0-t)/prod(rho.dims)*II) == rho_next);
 solve!(problem, Mosek.Optimizer(LOG=0));
 print(problem.status,"\n");
 print("robustness to white noise: ",problem.optval, "\n"); 
+
+function nlize(rho)
+  evs = eigvals(rho)
+  for it in evs
+    if real(it) < 0 || imag(it) != 0
+      println("evs ", it)
+    end
+  end
+
+  for i in 1:size(rho, 1)
+    if imag(rho[i, i]) != 0 || real(rho[i, i]) < 0
+      println("diag ", rho[i, i])
+    end
+  end
+end
+
+for rho in rhoAs
+  nlize(rho.value)
+end
+# next_rho = [nlize(rho) for rho in rhoBs]
+# next_rho = [nlize(rho) for rho in rhoCs]
 
 # II= zeros(Complex{Float64}, 8, 8)+I;
 # II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;

@@ -60,13 +60,13 @@ end
 
 function AccumSizes(dims::Array{Int,1})
   n= length(dims);
-sizes=Array{Int,1}(undef,n);
-s=1;
-  for k in reverse(1:n)
-  s*= dims[k];
-  sizes[k]=s;
-  end;
-return sizes;
+  sizes=Array{Int,1}(undef,n);
+  s=1;
+    for k in reverse(1:n)
+    s*= dims[k];
+    sizes[k]=s;
+    end;
+  return sizes;
 end;
 
 struct MultiState
@@ -76,15 +76,12 @@ end;
 
 function LocalIndex(L::Int,dd::Array{Int,1})
 	n=length(dd);
-	sizes= AccumSizes(dd);
 	kk=Array{Int,1}(undef,n);
 	s=L-1;
 	for k in reverse(1:n)
 		kk[k]= mod(s,dd[k])+1;
 		s= div(s,dd[k]);
 	end;
-	#kA=div(L-1,dd[2])+1;
-	#kB=mod(L-1,dd[2])+1;
 	return kk;
 end;
 

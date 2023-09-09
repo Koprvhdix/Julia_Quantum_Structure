@@ -80,6 +80,9 @@ function f_1(X_list,nps)
   II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;
   problem= maximize(t);
   problem.constraints+= ((t*rho.mat+(1.0-t)/prod(rho.dims)*II) == rho_next);
+  problem.constraints+= [rho in :SDP for rho in rhoAs]
+  problem.constraints+= [rho in :SDP for rho in rhoBs]
+  problem.constraints+= [rho in :SDP for rho in rhoCs]
   solve!(problem, Mosek.Optimizer, silent_solver=true)
   println(problem.optval)
 
@@ -96,21 +99,44 @@ function f_2(X_list,nps)
   II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;
   problem= maximize(t);
   problem.constraints+= ((t*rho.mat+(1.0-t)/prod(rho.dims)*II) == rho_next);
+  problem.constraints+= [rho in :SDP for rho in rhoAs]
+  problem.constraints+= [rho in :SDP for rho in rhoBs]
+  problem.constraints+= [rho in :SDP for rho in rhoCs]
 
   solve!(problem, Mosek.Optimizer, silent_solver=true)
   println(problem.optval)
   [[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]], problem.optval
 end
 
-nps = 300
+nps = 100
+
+function decompose_and_reconstruct_positive(A::AbstractMatrix)
+  F = eigen(A)
+  V = F.vectors
+  D = Diagonal(F.values)
+  
+  for i in 1:size(D, 1)
+      if real(D[i, i]) < 0
+          D[i, i] = 0
+      end
+  end
+
+  A_reconstructed = V * D * V'
+
+  for i in 1:size(A, 1)
+    A_reconstructed[i, i] = abs(A_reconstructed[i, i]) 
+  end
+  
+  return A_reconstructed/tr(A_reconstructed)
+end
 
 function nlize(rho)
   evs = eigvals(rho)
   revs = [real(it) for it in evs]
   ievs = [imag(it) for it in evs]
-  dim = length(evs)
+
   if ievs'*ievs/(revs'*revs)> 1e-3 || minimum(revs) < 0
-    randState(dim)
+    decompose_and_reconstruct_positive(rho)
   else rho/tr(rho)
   end
 end
