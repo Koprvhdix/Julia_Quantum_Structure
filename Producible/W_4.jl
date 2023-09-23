@@ -327,7 +327,7 @@ function part_3_train()
 end
 
 function prod_2_train()
-  nps = 100
+  nps = 1000
   for j in 1:20
     X_list_2 = [[randState(4) for index2 in 1:nps] for index1 in 1:3]
     for i in 1:30
@@ -363,6 +363,6 @@ function part_2_train()
   end
 end
 
-part_3_train()
-# prod_2_train()
+# part_3_train()
+prod_2_train()
 # part_2_train()

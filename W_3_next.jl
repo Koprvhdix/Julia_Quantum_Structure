@@ -2,7 +2,7 @@ using Convex, SCS, MosekTools
 using LinearAlgebra
 using Random, RandomMatrices
 
-# setprecision(20)
+setprecision(20)
 
 function randState(d::Int=2, L::Int=100)
   QPolytope= Array{Array{Complex{Float64},2},1}(undef,L);
