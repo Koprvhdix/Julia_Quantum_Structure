@@ -11,15 +11,4 @@ module BaseModule
     return V*conj(transpose(V))
   end;
   export randState
-
-  function nlize(rho)
-    evs = eigvals(rho)
-    revs = [real(it) for it in evs]
-    ievs = [imag(it) for it in evs]
-    if ievs'*ievs/(revs'*revs)> 1e-3 || minimum(revs) < 0
-      decompose_and_reconstruct_positive(rho)
-    else rho/tr(rho)
-    end
-  end;
-  export nlize
 end

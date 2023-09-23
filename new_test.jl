@@ -2,9 +2,10 @@ using Convex, SCS, MosekTools
 using LinearAlgebra
 using Random, RandomMatrices
 
-function randState(dim)
+function randState(dim, nps)
     re = randn(dim)+ [i*im for i in randn(dim)]
-    re*re'/(re'*re)
+    V = re*re'/(re'*re)
+    return V / nps
 end
 
 # the W state
@@ -51,25 +52,42 @@ function f_2(X_list,nps) # fix A in A|BC, B in B|AC and C in AB|C, then optimize
               0. 0. 0. 0. 0. 0. 0. 1. ];
     p = Variable(1,Positive());
     rhoAs = [HermitianSemidefinite(4) for i in 1:nps]
-    rhoBs = [HermitianSemidefinite(4) for i in 1:nps]
-    rhoCs = [HermitianSemidefinite(4) for i in 1:nps]
-    rho_next = sum(kron(X_list[1][i], rhoAs[i]) for i in 1:nps) + sum((exchange * kron(rhoBs[i], X_list[2][i]) * exchange) for i in 1:nps) +  sum(kron(rhoCs[i], X_list[3][i]) for i in 1:nps)
+    # rhoBs = [HermitianSemidefinite(4) for i in 1:nps]
+    # rhoCs = [HermitianSemidefinite(4) for i in 1:nps]
+    rho_next = sum(kron(X_list[1][i], rhoAs[i]) for i in 1:nps) + sum((exchange * kron(rhoAs[i], X_list[2][i]) * exchange) for i in 1:nps) +  sum(kron(rhoAs[i], X_list[3][i]) for i in 1:nps)
     objective = p
-    constraints = [p * orho + ((1.0-p) / 8.) * I(8) == rho_next, p>0, p<1]
+    constraints = [p * orho + ((1.0-p) / 8.) * I(8) == rho_next]
     problem = maximize(objective, constraints)
     solve!(problem, Mosek.Optimizer(LOG=0), silent_solver=true, verbose=false)
     println(problem.optval)
-    [problem.optval,[[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]]]
+    # [problem.optval,[[rho.value for rho in rhos] for rhos in [rhoAs, rhoBs, rhoCs]]]
+    [problem.optval,[rho.value for rho in rhoAs]]
 end
 
 # A test
 id2 = Matrix(I,2,2)
-nps = 100
+nps = 50
 res = []
 Xs = []
-pX_list = push!([randState(2) for i in 1:nps-1],id2/2)
+pX_list = push!([randState(2, nps) for i in 1:nps])
 X_list = [pX_list for j in 1:3]
-pvalue, X_list = f_2(X_list,nps)
+pvalue, X_list = f_2(X_list, nps)
+println(pvalue)
+
+global error_count = 0
+for current_matrix in X_list
+    evs = eigvals(current_matrix)
+    revs = [real(it) for it in evs]
+    ievs = [imag(it) for it in evs]
+    if minimum(revs) < 0
+      println(revs)
+      global error_count += 1
+    else
+
+    end
+end
+
+println(" error count ", error_count)
 
 # for k in 1:20 # 10 random starting point
 #     pX_list = push!([randState(2) for i in 1:nps-1],id2/2)
