@@ -150,10 +150,8 @@ function nlize(rho)
   evs = eigvals(rho)
   revs = [real(it) for it in evs]
   ievs = [imag(it) for it in evs]
-  if ievs'*ievs/(revs'*revs)> 1e-3 || minimum(revs) < 0
-    randState(size(rho, 1), 10)
-    # decompose_and_reconstruct_positive(rho)
-  else rho/(10 * tr(rho))
+  if ievs'*ievs/(revs'*revs) > 1e-3 || minimum(revs) < 0
+    println(revs)
   end
 end
 
@@ -162,41 +160,41 @@ struct MultiState
   dims::Array{Int,1}
 end;
 
-function EncodeNumber(L::Int,dim_list::Array{Int,1})
-	n = length(dd);
-	code_result = Array{Int,1}(undef,n);
-	number = L-1;
-	for k in reverse(1:n)
-		code_result[k] = mod(number, dim_list[k])+1;
-		number = div(number, dim_list[k]);
-	end;
-	return code_result;
-end;
+# function EncodeNumber(L::Int,dim_list::Array{Int,1})
+# 	n = length(dd);
+# 	code_result = Array{Int,1}(undef,n);
+# 	number = L-1;
+# 	for k in reverse(1:n)
+# 		code_result[k] = mod(number, dim_list[k])+1;
+# 		number = div(number, dim_list[k]);
+# 	end;
+# 	return code_result;
+# end;
 
-function DecodeNumber(code_result::Array{Int,1},dim_list::Array{Int,1})
-	dim_numbers = AccumSizes(dim_list);
-	n = length(code_result);
-	number = code_result[n]-1;
-	for k in reverse(1:(n-1))
-		number += dim_numbers[k+1] * (code_result[k]-1);
-	end;
-	return number+1;
-end;
+# function DecodeNumber(code_result::Array{Int,1},dim_list::Array{Int,1})
+# 	dim_numbers = AccumSizes(dim_list);
+# 	n = length(code_result);
+# 	number = code_result[n]-1;
+# 	for k in reverse(1:(n-1))
+# 		number += dim_numbers[k+1] * (code_result[k]-1);
+# 	end;
+# 	return number+1;
+# end;
   
 rho = MultiState(orho, [2, 2, 2, 2])
 
-function randState(dim)
-  V=randn(Complex{Float64},dim);
-  V/=norm(V);
-  return V*conj(transpose(V))
-end
-
-# function randState(dim, nps)
+# function randState(dim)
 #   V=randn(Complex{Float64},dim);
 #   V/=norm(V);
-#   V = V*conj(transpose(V))
-#   return V / nps
+#   return V*conj(transpose(V))
 # end
+
+function randState(dim, nps)
+  V=randn(Complex{Float64},dim);
+  V/=norm(V);
+  V = V*conj(transpose(V))
+  return V / nps
+end
 
 function part_3_rho_next(X_list1, X_list2, nps, train_part)
   # 2|1|1
@@ -303,14 +301,12 @@ function part_2_rho_next(X_list, X_list_2, nps, train_part)
   end
 end
 
-function train(rho_next, p_s)
+function train(rho_next)
   t = Variable(1,Positive());
 
   II= zeros(Complex{Float64},prod(rho.dims),prod(rho.dims))+I;
   problem= maximize(t);
   problem.constraints += ((t*rho.mat+(1.0-t)/prod(rho.dims)*II) == rho_next);
-  problem.constraints += (sum(sum(p_s[i]) for i in 1:6) == 1);
-
 
   solve!(problem, Mosek.Optimizer, silent_solver=true)
   println(problem.optval)
@@ -342,15 +338,29 @@ end
 function prod_2_train()
   nps = 100
   for j in 1:20
-    X_list_2 = [[randState(4) for index2 in 1:nps] for index1 in 1:3]
+    X_list_2 = [[randState(4, nps) for index2 in 1:nps] for index1 in 1:3]
     for i in 1:30
       rho_next, rhos_list = prod_2_rho_next(X_list_2, nps, 1)
       optval = train(rho_next)
-      X_list_1 = [[nlize(current_rho.value) for current_rho in rhos] for rhos in rhos_list]
+      temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_1[index1][index2])
+          nlize(X_list_2[index1][index2])
+        end
+      end
+      X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_2[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
 
       rho_next, rhos_list = prod_2_rho_next(X_list_1, nps, 2)
       optval = train(rho_next)
-      X_list_2 = [[nlize(current_rho.value) for current_rho in rhos] for rhos in rhos_list]
+      temp_X_list_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_2[index1][index2])
+          nlize(X_list_1[index1][index2])
+        end
+      end
+      X_list_2 = [[temp_X_list_2[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
     end
     println("one round ", j)
   end
@@ -359,23 +369,43 @@ end
 function part_2_train()
   nps = 100
   for j in 1:20
-    X_list_2_1 = [[randState(4, nps) for index2 in 1:nps] for index1 in 1:3]
-    X_list_2_2 = [[randState(8, nps) for index2 in 1:nps] for index1 in 1:4]
+    X_list_2_1 = [[randState(4, 2 * nps) for index2 in 1:nps] for index1 in 1:3]
+    X_list_2_2 = [[randState(8, 2 * nps) for index2 in 1:nps] for index1 in 1:4]
     for i in 1:30
       rho_next, rhos_list_1, rhos_list_2 = part_2_rho_next(X_list_2_1, X_list_2_2, nps, 1)
       optval = train(rho_next)
-      X_list_1_1 = [[nlize(current_rho.value) for current_rho in rhos] for rhos in rhos_list_1]
-      X_list_1_2 = [[nlize(current_rho.value) for current_rho in rhos] for rhos in rhos_list_2]
+      temp_X_list_1_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_1]
+      temp_X_list_1_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_2]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_1_1[index1][index2])
+          nlize(temp_X_list_1_2[index1][index2])
+        end
+      end
+      X_list_1_1 = [[temp_X_list_1_1[index1][index2] * tr(X_list_2_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
+      X_list_1_2 = [[temp_X_list_1_2[index1][index2] * tr(X_list_2_2[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+
+      println(sum([sum([tr(X_list_1_1[index1][index2]) for index2 in 1:nps]) for index1 in 1:3]))
+      println(sum([sum([tr(X_list_1_2[index1][index2]) for index2 in 1:nps]) for index1 in 1:4]))
       
       rho_next, rhos_list_1, rhos_list_2 = part_2_rho_next(X_list_1_1, X_list_1_2, nps, 2)
       optval = train(rho_next)
-      X_list_2_1 = [[nlize(current_rho.value) for current_rho in rhos] for rhos in rhos_list_1]
-      X_list_2_2 = [[nlize(current_rho.value) for current_rho in rhos] for rhos in rhos_list_2]
+      temp_X_list_2_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_1]
+      temp_X_list_2_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_2]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_2_1[index1][index2])
+          nlize(temp_X_list_2_2[index1][index2])
+        end
+      end
+      X_list_2_1 = [[temp_X_list_2_1[index1][index2] * tr(X_list_1_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
+      X_list_2_2 = [[temp_X_list_2_2[index1][index2] * tr(X_list_1_2[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+      
     end
     println("one round ", j)
   end
 end
 
-part_3_train()
-# prod_2_train()
+# part_3_train()
+prod_2_train()
 # part_2_train()
