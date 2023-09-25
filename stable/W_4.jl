@@ -121,31 +121,6 @@ exchange_34 = [1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. ;
 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. ;
 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. ]
 
-function decompose_and_reconstruct_positive(A::AbstractMatrix)
-  F = eigen(A)
-  V = F.vectors
-  D = Diagonal(F.values)
-  
-  for i in 1:size(D, 1)
-    D[i, i] = real(D[i, i])
-    if real(D[i, i]) < 0
-      D[i, i] = 0.0
-    end
-  end
-
-  A_reconstructed = V * D * V'
-  for i in 1:size(A_reconstructed, 1)
-    A_reconstructed[i, i] = real(A_reconstructed[i, i])
-  end
-
-  new_A = A_reconstructed/tr(A_reconstructed)
-  if any(isnan.(new_A)) || any(isinf.(new_A))
-    return randState(size(A_reconstructed, 1))
-  else
-    return new_A
-  end
-end
-
 function nlize(rho)
   evs = eigvals(rho)
   revs = [real(it) for it in evs]
@@ -180,7 +155,6 @@ function part_3_rho_next(X_list1, X_list2, nps, train_part)
     rho_4s = [HermitianSemidefinite(4) for i in 1:nps]
     rho_5s = [HermitianSemidefinite(4) for i in 1:nps]
     rho_6s = [HermitianSemidefinite(4) for i in 1:nps]
-    p_s = [[Variable(1,Positive()) for i in 1:nps] for j in 1:6]
 
     rho_next = sum(kron(kron(rho_1s[i], X_list1[1][i]), X_list2[1][i]) for i in 1:nps) + 
     sum((exchange_23 * kron(kron(rho_2s[i], X_list1[2][i]), X_list2[2][i]) * exchange_23) for i in 1:nps) + 
@@ -189,7 +163,7 @@ function part_3_rho_next(X_list1, X_list2, nps, train_part)
     sum((exchange_34 * kron(kron(X_list1[5][i], rho_5s[i]), X_list2[5][i]) * exchange_34) for i in 1:nps) +
     sum(kron(kron(X_list1[6][i], X_list2[6][i]), rho_6s[i]) for i in 1:nps)
 
-    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s, rho_5s, rho_6s], p_s
+    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s, rho_5s, rho_6s]
   elseif train_part == 2
     # X_list1 2    X_list2 1 part 3
     rho_1s = [HermitianSemidefinite(2) for i in 1:nps]
@@ -402,6 +376,6 @@ function part_2_train()
   end
 end
 
-# part_3_train()
+part_3_train()
 # prod_2_train()
 # part_2_train()
