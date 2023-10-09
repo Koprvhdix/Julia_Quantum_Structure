@@ -19,8 +19,6 @@ orho = [0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.
   0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ;
   0.0  0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.   0.  ]
 
-exchange_2_qubit = [1 0 0 0; 0 0 1 0; 0 1 0 0; 0 0 0 1]
-
 exchange_12 = [1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. ;
 0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. ;
 0. 0. 1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. ;
@@ -123,35 +121,13 @@ exchange_34 = [1. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. ;
 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. 0. 0. ;
 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 1. ]
 
-function decompose_and_reconstruct_positive(A::AbstractMatrix, nps)
-  F = eigen(A)
-  V = F.vectors
-  D = Diagonal(F.values)
-  
-  for i in 1:size(D, 1)
-    D[i, i] = real(D[i, i])
-    if real(D[i, i]) < 0
-      D[i, i] = 0.0
-    end
+function nlize(rho)
+  evs = eigvals(rho)
+  revs = [real(it) for it in evs]
+  ievs = [imag(it) for it in evs]
+  if ievs'*ievs/(revs'*revs) > 1e-3 || minimum(revs) < 0
+    println(revs)
   end
-
-  A_reconstructed = V * D * V'
-  for i in 1:size(A_reconstructed, 1)
-    A_reconstructed[i, i] = real(A_reconstructed[i, i])
-  end
-
-  new_A = A_reconstructed/(nps * tr(A_reconstructed))
-  if any(isnan.(new_A)) || any(isinf.(new_A))
-    return randState(size(A_reconstructed, 1)) / nps
-  else
-    return new_A
-  end
-end
-
-function randState(dim)
-  V=randn(Complex{Float64},dim);
-  V/=norm(V);
-  return V = V*conj(transpose(V))
 end
 
 struct MultiState
@@ -159,48 +135,139 @@ struct MultiState
   dims::Array{Int,1}
 end;
 
+  
 rho = MultiState(orho, [2, 2, 2, 2])
 
-function test_part_2(X_list_2, nps, train_part)
+function randState(dim, nps)
+  V=randn(Complex{Float64},dim);
+  V/=norm(V);
+  V = V*conj(transpose(V))
+  return V / nps
+end
+
+function part_3_rho_next(X_list1, X_list2, nps, train_part)
+  # 2|1|1
   if train_part == 1
+    # X_list1 1    X_list2 1
+    rho_1s = [HermitianSemidefinite(4) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(4) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(4) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(4) for i in 1:nps]
+    rho_5s = [HermitianSemidefinite(4) for i in 1:nps]
+    rho_6s = [HermitianSemidefinite(4) for i in 1:nps]
+
+    rho_next = sum(kron(kron(rho_1s[i], X_list1[1][i]), X_list2[1][i]) for i in 1:nps) + 
+    sum((exchange_23 * kron(kron(rho_2s[i], X_list1[2][i]), X_list2[2][i]) * exchange_23) for i in 1:nps) + 
+    sum((exchange_24 * kron(kron(rho_3s[i], X_list1[3][i]), X_list2[3][i]) * exchange_24) for i in 1:nps) +
+    sum(kron(kron(X_list1[4][i], X_list2[4][i]), rho_4s[i]) for i in 1:nps) +
+    sum((exchange_34 * kron(kron(X_list1[5][i], rho_5s[i]), X_list2[5][i]) * exchange_34) for i in 1:nps) +
+    sum(kron(kron(X_list1[6][i], rho_6s[i]), X_list2[6][i]) for i in 1:nps)
+
+    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s, rho_5s, rho_6s]
+  elseif train_part == 2
+    # X_list1 2    X_list2 1 part 3
     rho_1s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_5s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_6s = [HermitianSemidefinite(2) for i in 1:nps]
 
-    rho_next = sum(kron(rho_1s[i], X_list_2[i]) for i in 1:nps) +
-    sum((exchange_12 * kron(rho_1s[i], X_list_2[i]) * exchange_12) for i in 1:nps) +
-    sum((exchange_13 * kron(rho_1s[i], X_list_2[i]) * exchange_13) for i in 1:nps) +
-    sum((exchange_14 * kron(rho_1s[i], X_list_2[i]) * exchange_14) for i in 1:nps)
+    rho_next = sum(kron(kron(X_list1[1][i], rho_1s[i]), X_list2[1][i]) for i in 1:nps) + 
+    sum((exchange_23 * kron(kron(X_list1[2][i], rho_2s[i]), X_list2[2][i]) * exchange_23) for i in 1:nps) + 
+    sum((exchange_24 * kron(kron(X_list1[3][i], rho_3s[i]), X_list2[3][i]) * exchange_24) for i in 1:nps) +
+    sum(kron(kron(rho_4s[i], X_list2[4][i]), X_list1[4][i]) for i in 1:nps) +
+    sum((exchange_34 * kron(kron(rho_5s[i], X_list1[5][i]), X_list2[5][i]) * exchange_34) for i in 1:nps) +
+    sum(kron(kron(rho_6s[i], X_list1[6][i]), X_list2[6][i]) for i in 1:nps)
 
-    return rho_next, rho_1s
+    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s, rho_5s, rho_6s]
   else
-    rho_1s = [HermitianSemidefinite(8) for i in 1:nps]
+    # X_list1 2    X_list2 1 part 2
+    rho_1s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_5s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_6s = [HermitianSemidefinite(2) for i in 1:nps]
 
-    rho_next = sum(kron(X_list_2[i], rho_1s[i]) for i in 1:nps) +
-    sum((exchange_12 * kron(X_list_2[i], rho_1s[i]) * exchange_12) for i in 1:nps) +
-    sum((exchange_13 * kron(X_list_2[i], rho_1s[i]) * exchange_13) for i in 1:nps) +
-    sum((exchange_14 * kron(X_list_2[i], rho_1s[i]) * exchange_14) for i in 1:nps)
+    rho_next = sum(kron(kron(X_list1[1][i], X_list2[1][i]), rho_1s[i]) for i in 1:nps) + 
+    sum((exchange_23 * kron(kron(X_list1[2][i], X_list2[2][i]), rho_2s[i]) * exchange_23) for i in 1:nps) + 
+    sum((exchange_24 * kron(kron(X_list1[3][i], X_list2[3][i]), rho_3s[i]) * exchange_24) for i in 1:nps) +
+    sum(kron(kron(X_list2[4][i], rho_4s[i]), X_list1[4][i]) for i in 1:nps) +
+    sum((exchange_34 * kron(kron(X_list2[5][i] , X_list1[5][i]), rho_5s[i]) * exchange_34) for i in 1:nps) +
+    sum(kron(kron(X_list2[6][i], X_list1[6][i]), rho_6s[i]) for i in 1:nps)
 
-    return rho_next, rho_1s
+    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s, rho_5s, rho_6s]
   end
 end
 
-function test_part_2_train()
-  nps = 100
-  for j in 1:20
-    # X_list_2_1 = [randState(4, 1) for index2 in 1:nps]
-    X_list_2_2 = [randState(2) for index2 in 1:nps]
-    # push!(X_list_2_2, I(2)/2)
-    for i in 1:20
-      rho_next, rhos_list_2 = test_part_2(X_list_2_2, nps, 2)
-      optval = train(rho_next)
+function prod_2_rho_next(X_list, nps, train_part)
+  rhoAs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoBs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoCs = [HermitianSemidefinite(4) for i in 1:nps]
+  if train_part == 1
+    rho_next = sum(kron(rhoAs[i], X_list[1][i]) for i in 1:nps) + sum((exchange_23 * kron(rhoBs[i], X_list[2][i]) * exchange_23) for i in 1:nps) +  sum((exchange_24 * kron(rhoCs[i], X_list[3][i]) * exchange_24) for i in 1:nps)
+    return rho_next, [rhoAs, rhoBs, rhoCs]
+  else
+    rho_next = sum(kron(X_list[1][i], rhoAs[i]) for i in 1:nps) + sum((exchange_23 * kron(X_list[2][i], rhoBs[i]) * exchange_23) for i in 1:nps) +  sum((exchange_24 * kron(X_list[3][i], rhoCs[i]) * exchange_24) for i in 1:nps)
+    return rho_next, [rhoAs, rhoBs, rhoCs]
+  end
+end
 
-      X_list_1_2 = checkout_rho_list_3(rhos_list_2, nps)
-      
-      rho_next, rhos_list_2 = test_part_2(X_list_1_2, nps, 1)
-      optval = train(rho_next)
+function part_2_rho_next(X_list, X_list_2, nps, train_part)
+  rhoAs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoBs = [HermitianSemidefinite(4) for i in 1:nps]
+  rhoCs = [HermitianSemidefinite(4) for i in 1:nps]
+  if train_part == 1
+    rho_1s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_next = sum(kron(rhoAs[i], X_list[1][i]) for i in 1:nps) + 
+    sum((exchange_23 * kron(rhoBs[i], X_list[2][i]) * exchange_23) for i in 1:nps) + 
+    sum((exchange_24 * kron(rhoCs[i], X_list[3][i]) * exchange_24) for i in 1:nps) +
+    sum(kron(rho_1s[i], X_list_2[1][i]) for i in 1:nps) +
+    sum((exchange_12 * kron(rho_2s[i], X_list_2[2][i]) * exchange_12) for i in 1:nps) +
+    sum((exchange_13 * kron(rho_3s[i], X_list_2[3][i]) * exchange_13) for i in 1:nps) +
+    sum((exchange_14 * kron(rho_4s[i], X_list_2[4][i]) * exchange_14) for i in 1:nps)
+    return rho_next, [rhoAs, rhoBs, rhoCs], [rho_1s, rho_2s, rho_3s, rho_4s]
+  else
+    rho_1s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_next = sum(kron(X_list[1][i], rhoAs[i]) for i in 1:nps) + 
+    sum((exchange_23 * kron(X_list[2][i], rhoBs[i]) * exchange_23) for i in 1:nps) + 
+    sum((exchange_24 * kron(X_list[3][i], rhoCs[i]) * exchange_24) for i in 1:nps) +
+    sum(kron(X_list_2[1][i], rho_1s[i]) for i in 1:nps) +
+    sum((exchange_12 * kron(X_list_2[2][i], rho_2s[i]) * exchange_12) for i in 1:nps) +
+    sum((exchange_13 * kron(X_list_2[3][i], rho_3s[i]) * exchange_13) for i in 1:nps) +
+    sum((exchange_14 * kron(X_list_2[4][i], rho_4s[i]) * exchange_14) for i in 1:nps)
+    return rho_next, [rhoAs, rhoBs, rhoCs], [rho_1s, rho_2s, rho_3s, rho_4s]
+  end
+end
 
-      X_list_2_2 = checkout_rho_list_1(rhos_list_2, nps)
-    end
-    println("one round ", j)
+function stretch_rho_next(X_list_2, nps, train_part)
+  if train_part == 1
+    rho_1s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(2) for i in 1:nps]
+    rho_next = sum((exchange_14 * kron(rho_4s[i], X_list_2[4][i]) * exchange_14) for i in 1:nps) +
+    sum((exchange_12 * kron(rho_2s[i], X_list_2[2][i]) * exchange_12) for i in 1:nps) +
+    sum((exchange_13 * kron(rho_3s[i], X_list_2[3][i]) * exchange_13) for i in 1:nps) +
+    sum(kron(rho_1s[i], X_list_2[1][i]) for i in 1:nps)
+    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s]
+  else
+    rho_1s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_2s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_3s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_4s = [HermitianSemidefinite(8) for i in 1:nps]
+    rho_next = sum((exchange_14 * kron(X_list_2[4][i], rho_4s[i]) * exchange_14) for i in 1:nps) +
+    sum((exchange_12 * kron(X_list_2[2][i], rho_2s[i]) * exchange_12) for i in 1:nps) +
+    sum((exchange_13 * kron(X_list_2[3][i], rho_3s[i]) * exchange_13) for i in 1:nps) +
+    sum(kron(X_list_2[1][i], rho_1s[i]) for i in 1:nps)
+    return rho_next, [rho_1s, rho_2s, rho_3s, rho_4s]
   end
 end
 
@@ -216,52 +283,241 @@ function train(rho_next)
   problem.optval
 end
 
-function checkout_rho_list_1(rho_list, nps)
-  global error_count = 0
-  result_list = Array{Matrix{Complex{Float64}},1}(UndefInitializer(), nps);
-  tr_list = Array{Float64,1}(undef, nps);
-  for current_index in 1:nps
-    current_matrix = rho_list[current_index].value
+function part_3_train()
+  nps = 100
+  for j in 1:20
+    X_list_2 = [[randState(2, nps) for index2 in 1:nps] for index1 in 1:6]
+    X_list_3 = [[randState(2, 1.0) for index2 in 1:nps] for index1 in 1:6]
+    for i in 1:30
+      rho_next, rhos_list = part_3_rho_next(X_list_2, X_list_3, nps, 1)
+      optval = train(rho_next)
+      temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:6
+        for index2 in 1:nps
+          nlize(temp_X_list_1[index1][index2])
+          nlize(X_list_2[index1][index2])
+          nlize(X_list_3[index1][index2])
+        end
+      end
+      X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_2[index1][index2]) for index2 in 1:nps] for index1 in 1:6]
 
-    tr_list[current_index] = tr(current_matrix)
-    evs = eigvals(current_matrix)
-    revs = [real(it) for it in evs]
-    ievs = [imag(it) for it in evs]
-
-    if ievs'*ievs/(revs'*revs) > 1e-3 || minimum(revs) < 0 
-      error_count += 1
-      result_list[current_index] = decompose_and_reconstruct_positive(current_matrix, nps)
-    else 
-      result_list[current_index] = current_matrix / (nps * tr(current_matrix))
+      rho_next, rhos_list = part_3_rho_next(X_list_1, X_list_3, nps, 2)
+      optval = train(rho_next)
+      temp_X_list_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:6
+        for index2 in 1:nps
+          nlize(temp_X_list_2[index1][index2])
+          nlize(X_list_1[index1][index2])
+          nlize(X_list_3[index1][index2])
+        end
+      end
+      X_list_2 = [[temp_X_list_2[index1][index2] * tr(X_list_3[index1][index2]) for index2 in 1:nps] for index1 in 1:6]
+      
+      rho_next, rhos_list = part_3_rho_next(X_list_1, X_list_2, nps, 3)
+      optval = train(rho_next)
+      temp_X_list_3 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:6
+        for index2 in 1:nps
+          nlize(temp_X_list_3[index1][index2])
+          nlize(X_list_1[index1][index2])
+          nlize(X_list_2[index1][index2])
+        end
+      end
+      X_list_3 = [[temp_X_list_3[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:6]
     end
+    println("one round ", j)
   end
-
-  println("sum ", nps, "error count ", error_count)
-  return result_list
 end
 
-function checkout_rho_list_3(rho_list, nps)
-  global error_count = 0
-  result_list = Array{Matrix{Complex{Float64}},1}(UndefInitializer(), nps);
-  tr_list = Array{Float64,1}(undef, nps);
-  for current_index in 1:nps
-    current_matrix = rho_list[current_index].value
+function prod_2_train()
+  nps = 100
+  for j in 1:20
+    X_list_2 = [[randState(4, nps) for index2 in 1:nps] for index1 in 1:3]
+    for i in 1:30
+      rho_next, rhos_list = prod_2_rho_next(X_list_2, nps, 1)
+      optval = train(rho_next)
+      temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_1[index1][index2])
+          nlize(X_list_2[index1][index2])
+        end
+      end
+      X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_2[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
 
-    tr_list[current_index] = tr(current_matrix)
-    evs = eigvals(current_matrix)
-    revs = [real(it) for it in evs]
-    ievs = [imag(it) for it in evs]
-
-    if ievs'*ievs/(revs'*revs) > 1e-3 || minimum(revs) < 0 
-      error_count += 1
-      result_list[current_index] = decompose_and_reconstruct_positive(current_matrix, 1)
-    else 
-      result_list[current_index] = current_matrix / tr(current_matrix)
+      rho_next, rhos_list = prod_2_rho_next(X_list_1, nps, 2)
+      optval = train(rho_next)
+      temp_X_list_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_2[index1][index2])
+          nlize(X_list_1[index1][index2])
+        end
+      end
+      X_list_2 = [[temp_X_list_2[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
     end
+    println("one round ", j)
   end
-
-  println("sum ", nps, "error count ", error_count)
-  return result_list
 end
 
-test_part_2_train()
+function part_2_train()
+  nps = 300
+  for j in 1:20
+    X_list_2_1 = [[randState(4, 2 * nps) for index2 in 1:nps] for index1 in 1:3]
+    X_list_2_2 = [[randState(2, 2 * nps) for index2 in 1:nps] for index1 in 1:4]
+    for i in 1:30
+      rho_next, rhos_list_1, rhos_list_2 = part_2_rho_next(X_list_2_1, X_list_2_2, nps, 2)
+      optval = train(rho_next)
+      temp_X_list_1_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_1]
+      temp_X_list_1_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_2]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_1_1[index1][index2])
+          nlize(temp_X_list_1_2[index1][index2])
+        end
+      end
+      X_list_1_1 = [[temp_X_list_1_1[index1][index2] * tr(X_list_2_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
+      X_list_1_2 = [[temp_X_list_1_2[index1][index2] * tr(X_list_2_2[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+
+      println(sum([sum([tr(X_list_1_1[index1][index2]) for index2 in 1:nps]) for index1 in 1:3]))
+      println(sum([sum([tr(X_list_1_2[index1][index2]) for index2 in 1:nps]) for index1 in 1:4]))
+      
+      rho_next, rhos_list_1, rhos_list_2 = part_2_rho_next(X_list_1_1, X_list_1_2, nps, 1)
+      optval = train(rho_next)
+      temp_X_list_2_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_1]
+      temp_X_list_2_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list_2]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_2_1[index1][index2])
+          nlize(temp_X_list_2_2[index1][index2])
+        end
+      end
+      X_list_2_1 = [[temp_X_list_2_1[index1][index2] * tr(X_list_1_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
+      X_list_2_2 = [[temp_X_list_2_2[index1][index2] * tr(X_list_1_2[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+      
+    end
+    println("one round ", j)
+  end
+end
+
+function test()
+  nps = 100
+  for j in 1:20
+    X_list_2 = [[randState(4, nps) for index2 in 1:nps] for index1 in 1:3]
+    for i in 1:10
+      rho_next, rhos_list = prod_2_rho_next(X_list_2, nps, 1)
+      optval = train(rho_next)
+      temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_1[index1][index2])
+          nlize(X_list_2[index1][index2])
+        end
+      end
+      X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_2[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
+
+      rho_next, rhos_list = prod_2_rho_next(X_list_1, nps, 2)
+      optval = train(rho_next)
+      temp_X_list_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_2[index1][index2])
+          nlize(X_list_1[index1][index2])
+        end
+      end
+      X_list_2 = [[temp_X_list_2[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:3]
+      
+      # if i == 10
+      #   append!(X_list_2, X_list_1)
+      # end
+    end
+
+    append!(X_list_2, X_list_2)
+    X_list_3 = [[randState(2, 1.0) for index2 in 1:nps] for index1 in 1:6]
+    for i in 1:10
+      rho_next, rhos_list = part_3_rho_next(X_list_2, X_list_3, nps, 3)
+      optval = train(rho_next)
+      temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:6
+        for index2 in 1:nps
+          nlize(temp_X_list_1[index1][index2])
+        end
+      end
+      X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_3[index1][index2]) for index2 in 1:nps] for index1 in 1:6]
+
+      rho_next, rhos_list = part_3_rho_next(X_list_2, X_list_1, nps, 2)
+      optval = train(rho_next)
+      temp_X_list_3 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:6
+        for index2 in 1:nps
+          nlize(temp_X_list_3[index1][index2])
+        end
+      end
+      X_list_3 = [[temp_X_list_3[index1][index2] * tr(X_list_2[index1][index2]) for index2 in 1:nps] for index1 in 1:6]
+
+      rho_next, rhos_list = part_3_rho_next(X_list_3, X_list_1, nps, 1)
+      optval = train(rho_next)
+      temp_X_list_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:6
+        for index2 in 1:nps
+          nlize(temp_X_list_2[index1][index2])
+        end
+      end
+      X_list_2 = [[temp_X_list_2[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:6]
+    end
+
+    for i in 1:10
+      rho_next, rhos_list = stretch_rho_next(X_list_3, nps, 2)
+      optval = train(rho_next)
+      temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_1[index1][index2])
+        end
+      end
+      X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_3[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+
+      rho_next, rhos_list = stretch_rho_next(X_list_1, nps, 1)
+      optval = train(rho_next)
+      temp_X_list_3 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+      for index1 in 1:3
+        for index2 in 1:nps
+          nlize(temp_X_list_3[index1][index2])
+        end
+      end
+      X_list_3 = [[temp_X_list_3[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+    end
+  end
+end
+
+function stretch_2_train()
+  nps = 100
+  X_list_3 = [[randState(2, nps) for index2 in 1:nps] for index1 in 1:4]
+  for i in 1:10
+    rho_next, rhos_list = stretch_rho_next(X_list_3, nps, 2)
+    optval = train(rho_next)
+    temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+    for index1 in 1:3
+      for index2 in 1:nps
+        nlize(temp_X_list_1[index1][index2])
+      end
+    end
+    X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_3[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+
+    rho_next, rhos_list = stretch_rho_next(X_list_1, nps, 1)
+    optval = train(rho_next)
+    temp_X_list_3 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
+    for index1 in 1:3
+      for index2 in 1:nps
+        nlize(temp_X_list_3[index1][index2])
+      end
+    end
+    X_list_3 = [[temp_X_list_3[index1][index2] * tr(X_list_1[index1][index2]) for index2 in 1:nps] for index1 in 1:4]
+  end
+end
+
+# part_3_train()
+# prod_2_train()
+# part_2_train()
+
+stretch_2_train()

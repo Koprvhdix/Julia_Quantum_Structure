@@ -4,6 +4,41 @@ using Convex, SCS, MosekTools
 using LinearAlgebra
 using Random, RandomMatrices
 
+function swap_chars(s, i, j)
+  lst = collect(s)
+  lst[i], lst[j] = lst[j], lst[i]
+  return join(lst)
+end
+
+function nlize(rho)
+  evs = eigvals(rho)
+  revs = [real(it) for it in evs]
+  ievs = [imag(it) for it in evs]
+  if ievs'*ievs/(revs'*revs) > 1e-3 || minimum(revs) < 0
+    println(revs)
+  end
+end
+
+N = 5
+
+function get_exchange_matrix(N, num1, num2)
+  the_matrix = zeros(Int64, 2 ^ N, 2 ^ N)
+  for number in 0:(2 ^ N - 1)
+    number_str = lpad(string(number, base=2), N, '0')
+    number_str = swap_chars(number_str, num1, num2)
+    number_23 = parse(Int64, number_str, base = 2)
+    the_matrix[number + 1, number_23 + 1] = 1
+  end
+  return(the_matrix)
+end
+
+exchange_23 = get_exchange_matrix(N, 2, 3)
+exchange_24 = get_exchange_matrix(N, 2, 3)
+exchange_25 = get_exchange_matrix(N, 2, 3)
+exchange_34 = get_exchange_matrix(N, 3, 4)
+exchange_35 = get_exchange_matrix(N, 3, 5)
+exchange_45 = get_exchange_matrix(N, 4, 5)
+
 Cl5_matrix = zeros(32, 32)
 
 indices = [1, 16, 20, 29]
@@ -141,13 +176,15 @@ end
   
 function part_4_train()
     # 2|1|1|1
-    nps = 100
+    nps = 20
     for j in 1:20
-      X_list_2 = [[randState(2, 1 / nps) for index2 in 1:nps] for index1 in 1:10]
-      X_list_3 = [[randState(2, 1) for index2 in 1:nps] for index1 in 1:10]
-      X_list_4 = [[randState(2, 1) for index2 in 1:nps] for index1 in 1:10]
+      X_list_2 = [vcat([randState(2, 1 / nps) for index2 in 1:(nps - 1)], [I(2) / (2 * nps)]) for index1 in 1:10]
+      X_list_3 = [vcat([randState(2, 1) for index2 in 1:(nps - 1)], [I(2) / 2]) for index1 in 1:10]
+      X_list_4 = [vcat([randState(2, 1) for index2 in 1:(nps - 1)], [I(2) / 2]) for index1 in 1:10]
       for i in 1:30
+        println("finish init")
         rho_next, rhos_list = part_4_rho_next(X_list_2, X_list_3, X_list_4, nps, 1)
+        println("start train")
         optval = train(rho_next)
         temp_X_list_1 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
         for index1 in 1:6
@@ -159,7 +196,7 @@ function part_4_train()
         end
         X_list_1 = [[temp_X_list_1[index1][index2] * tr(X_list_2[index1][index2]) for index2 in 1:nps] for index1 in 1:10]
   
-        rho_next, rhos_list = part_3_rho_next(X_list_1, X_list_3, X_list_4, nps, 2)
+        rho_next, rhos_list = part_4_rho_next(X_list_1, X_list_3, X_list_4, nps, 2)
         optval = train(rho_next)
         temp_X_list_2 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
         for index1 in 1:6
@@ -171,7 +208,7 @@ function part_4_train()
         end
         X_list_2 = [[temp_X_list_2[index1][index2] * tr(X_list_3[index1][index2]) for index2 in 1:nps] for index1 in 1:10]
         
-        rho_next, rhos_list = part_3_rho_next(X_list_1, X_list_2, X_list_4, nps, 3)
+        rho_next, rhos_list = part_4_rho_next(X_list_1, X_list_2, X_list_4, nps, 3)
         optval = train(rho_next)
         temp_X_list_3 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
         for index1 in 1:6
@@ -183,7 +220,7 @@ function part_4_train()
         end
         X_list_3 = [[temp_X_list_3[index1][index2] * tr(X_list_4[index1][index2]) for index2 in 1:nps] for index1 in 1:10]
 
-        rho_next, rhos_list = part_3_rho_next(X_list_1, X_list_2, X_list_3, nps, 4)
+        rho_next, rhos_list = part_4_rho_next(X_list_1, X_list_2, X_list_3, nps, 4)
         optval = train(rho_next)
         temp_X_list_4 = [[current_rho.value for current_rho in rhos] for rhos in rhos_list]
         for index1 in 1:6
